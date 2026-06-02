@@ -31,50 +31,87 @@ const RootRedirect = () => {
   }
 };
 
+const AppContent = () => {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'var(--color-bg)',
+        flexDirection: 'column',
+        gap: '12px'
+      }}>
+        <div className="spinner" style={{
+          width: '36px',
+          height: '36px',
+          border: '3.5px solid var(--color-primary-light)',
+          borderTopColor: 'var(--color-primary)',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }}></div>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.02em' }}>Syncing secure session...</p>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/complete-profile" element={<CompleteProfile />} />
+
+        <Route path="/dashboard" element={<Layout />}>
+          <Route path="student" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <StudentDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="rep" element={
+            <ProtectedRoute allowedRoles={['rep']}>
+              <RepDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="rep/create" element={
+            <ProtectedRoute allowedRoles={['rep']}>
+              <CreateRequest />
+            </ProtectedRoute>
+          } />
+
+          <Route path="admin" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="admin/create" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <CreateRequest />
+            </ProtectedRoute>
+          } />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+};
+
 const App = () => {
   return (
     <AuthProvider>
       <DataProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<RootRedirect />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/complete-profile" element={<CompleteProfile />} />
-
-            <Route path="/dashboard" element={<Layout />}>
-              <Route path="student" element={
-                <ProtectedRoute allowedRoles={['student']}>
-                  <StudentDashboard />
-                </ProtectedRoute>
-              } />
-
-              <Route path="rep" element={
-                <ProtectedRoute allowedRoles={['rep']}>
-                  <RepDashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="rep/create" element={
-                <ProtectedRoute allowedRoles={['rep']}>
-                  <CreateRequest />
-                </ProtectedRoute>
-              } />
-
-              <Route path="admin" element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/create" element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <CreateRequest />
-                </ProtectedRoute>
-              } />
-            </Route>
-
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Router>
+        <AppContent />
       </DataProvider>
     </AuthProvider>
   );

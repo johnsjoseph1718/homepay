@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -42,5 +42,5 @@ if (isConfigValid) {
   console.warn('Firebase Warning: Firebase credentials are not fully configured yet. Google Sign-In will not be active.');
 }
 
-export { app, auth, googleProvider, signInWithPopup, signOut };
+export { app, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged };
 

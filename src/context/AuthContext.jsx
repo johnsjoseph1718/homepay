@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from 'react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut } from '../firebase';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -12,6 +12,46 @@ export const AuthProvider = ({ children }) => {
   });
 
   const [googleUser, setGoogleUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const email = firebaseUser.email;
+        const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
+        const foundUser = users.find(u => u.email?.trim().toLowerCase() === email?.trim().toLowerCase());
+
+        if (foundUser) {
+          if (foundUser.uid !== firebaseUser.uid) {
+            foundUser.uid = firebaseUser.uid;
+            localStorage.setItem('homepay_db_users', JSON.stringify(users));
+          }
+          setUser(foundUser);
+          localStorage.setItem('homepay_user', JSON.stringify(foundUser));
+          setGoogleUser(null);
+        } else {
+          setGoogleUser({ name: firebaseUser.displayName || '', email, uid: firebaseUser.uid });
+          setUser(null);
+          localStorage.removeItem('homepay_user');
+        }
+      } else {
+        const savedUser = localStorage.getItem('homepay_user');
+        const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+        if (parsedUser && parsedUser.uid) {
+          setUser(null);
+          localStorage.removeItem('homepay_user');
+        }
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const login = (email, password) => {
     const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
@@ -33,17 +73,15 @@ export const AuthProvider = ({ children }) => {
       const { email, displayName, uid } = result.user;
 
       const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
-      const foundUser = users.find(u => u.email === email);
+      const foundUser = users.find(u => u.email?.trim().toLowerCase() === email?.trim().toLowerCase());
 
       if (foundUser) {
-        // If user already exists, update their UID and login
         foundUser.uid = uid;
         localStorage.setItem('homepay_db_users', JSON.stringify(users));
         setUser(foundUser);
         localStorage.setItem('homepay_user', JSON.stringify(foundUser));
         return { success: true, isNewUser: false };
       } else {
-        // New user: set googleUser state and redirect to Complete Profile
         setGoogleUser({ name: displayName || '', email, uid });
         return { success: true, isNewUser: true };
       }
@@ -201,7 +239,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleUser, login, signInWithGoogle, completeGoogleSignup, cancelGoogleSignup, signup, logout }}>
+    <AuthContext.Provider value={{ user, googleUser, loading, login, signInWithGoogle, completeGoogleSignup, cancelGoogleSignup, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
