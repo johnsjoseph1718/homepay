@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -33,7 +33,9 @@ if (isConfigValid) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    });
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({
       prompt: 'select_account'
