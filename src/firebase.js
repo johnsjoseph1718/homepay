@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,6 +14,7 @@ const firebaseConfig = {
 let app;
 let auth;
 let googleProvider;
+let db;
 
 console.log("Firebase Env Check:", {
   apiKey: firebaseConfig.apiKey ? "LOADED" : "MISSING",
@@ -31,6 +33,7 @@ if (isConfigValid) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({
       prompt: 'select_account'
@@ -42,5 +45,6 @@ if (isConfigValid) {
   console.warn('Firebase Warning: Firebase credentials are not fully configured yet. Google Sign-In will not be active.');
 }
 
-export { app, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged };
+export { app, auth, googleProvider, db, doc, getDoc, setDoc, collection, onSnapshot, signInWithPopup, signOut, onAuthStateChanged };
+
 

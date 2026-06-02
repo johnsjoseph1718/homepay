@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { db, collection, onSnapshot } from '../firebase';
 
 const DataContext = createContext();
 
@@ -9,6 +10,20 @@ export const DataProvider = ({ children }) => {
     const { user } = useAuth();
     const [requests, setRequests] = useState([]);
     const [payments, setPayments] = useState([]);
+    const [firestoreUsers, setFirestoreUsers] = useState([]);
+
+    // Sync Firestore registered users in real-time
+    useEffect(() => {
+        if (!db) return;
+        const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
+            const usersList = [];
+            snapshot.forEach(doc => {
+                usersList.push({ id: doc.id, ...doc.data() });
+            });
+            setFirestoreUsers(usersList);
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Seed mock data if database is empty
     useEffect(() => {
@@ -175,8 +190,24 @@ export const DataProvider = ({ children }) => {
 
     // Fetch all students belonging to a target class
     const getClassStudents = useCallback((dept, sem, div) => {
-        const allUsers = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
-        return allUsers.filter(u => 
+        const matchingFirestoreStudents = firestoreUsers.filter(u => 
+            u.role === 'student' && 
+            u.department?.trim().toLowerCase() === dept?.trim().toLowerCase() &&
+            u.semester?.trim().toLowerCase() === sem?.trim().toLowerCase() &&
+            u.division?.trim().toLowerCase() === div?.trim().toLowerCase()
+        );
+
+        if (matchingFirestoreStudents.length > 0) {
+            return matchingFirestoreStudents.sort((a, b) => {
+                const rollA = a.rollNumber || '';
+                const rollB = b.rollNumber || '';
+                return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+        }
+
+        // Fallback to seeded localStorage users if no real Firestore users are registered in this class yet
+        const localUsers = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
+        return localUsers.filter(u => 
             u.role === 'student' && 
             u.department?.trim().toLowerCase() === dept?.trim().toLowerCase() &&
             u.semester?.trim().toLowerCase() === sem?.trim().toLowerCase() &&
@@ -186,7 +217,7 @@ export const DataProvider = ({ children }) => {
             const rollB = b.rollNumber || '';
             return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
         });
-    }, []);
+    }, [firestoreUsers]);
 
     return (
         <DataContext.Provider value={{

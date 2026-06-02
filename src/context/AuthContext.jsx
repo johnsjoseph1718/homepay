@@ -1,16 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from '../firebase';
+import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, db, doc, getDoc, setDoc } from '../firebase';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('homepay_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-
+  const [user, setUser] = useState(null);
   const [googleUser, setGoogleUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,32 +16,29 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const email = firebaseUser.email;
-        const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
-        const foundUser = users.find(u => u.email?.trim().toLowerCase() === email?.trim().toLowerCase());
-
-        if (foundUser) {
-          if (foundUser.uid !== firebaseUser.uid) {
-            foundUser.uid = firebaseUser.uid;
-            localStorage.setItem('homepay_db_users', JSON.stringify(users));
+        try {
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (userDoc.exists()) {
+            const profileData = userDoc.data();
+            setUser(profileData);
+            setGoogleUser(null);
+          } else {
+            // Firebase Auth authenticated, but profile document not created in Firestore yet
+            setGoogleUser({
+              name: firebaseUser.displayName || '',
+              email: firebaseUser.email,
+              uid: firebaseUser.uid
+            });
+            setUser(null);
           }
-          setUser(foundUser);
-          localStorage.setItem('homepay_user', JSON.stringify(foundUser));
-          setGoogleUser(null);
-        } else {
-          setGoogleUser({ name: firebaseUser.displayName || '', email, uid: firebaseUser.uid });
+        } catch (error) {
+          console.error("Error fetching user profile from Firestore:", error);
           setUser(null);
-          localStorage.removeItem('homepay_user');
         }
       } else {
-        const savedUser = localStorage.getItem('homepay_user');
-        const parsedUser = savedUser ? JSON.parse(savedUser) : null;
-        if (parsedUser && parsedUser.uid) {
-          setUser(null);
-          localStorage.removeItem('homepay_user');
-        }
+        setUser(null);
       }
       setLoading(false);
     });
@@ -72,14 +65,11 @@ export const AuthProvider = ({ children }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const { email, displayName, uid } = result.user;
 
-      const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
-      const foundUser = users.find(u => u.email?.trim().toLowerCase() === email?.trim().toLowerCase());
+      const userDoc = await getDoc(doc(db, "users", uid));
 
-      if (foundUser) {
-        foundUser.uid = uid;
-        localStorage.setItem('homepay_db_users', JSON.stringify(users));
-        setUser(foundUser);
-        localStorage.setItem('homepay_user', JSON.stringify(foundUser));
+      if (userDoc.exists()) {
+        const profileData = userDoc.data();
+        setUser(profileData);
         return { success: true, isNewUser: false };
       } else {
         setGoogleUser({ name: displayName || '', email, uid });
@@ -91,13 +81,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const completeGoogleSignup = (signupData) => {
+  const completeGoogleSignup = async (signupData) => {
     if (!googleUser) {
       return { success: false, error: 'No active Google session found.' };
     }
 
     const { role } = signupData;
-    const users = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
 
     let assignedDetails = {
       department: signupData.department || '',
@@ -114,7 +103,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'Department, Semester, and Division are required for representatives.' };
       }
 
-      // Extract First Name from Google User Name and generate expected code
       const firstName = googleUser.name.trim().split(/\s+/)[0] || '';
       if (!firstName) {
         return { success: false, error: 'Full Name is required to validate representative access.' };
@@ -147,13 +135,15 @@ export const AuthProvider = ({ children }) => {
       ...assignedDetails
     };
 
-    users.push(newUser);
-    localStorage.setItem('homepay_db_users', JSON.stringify(users));
-
-    setUser(newUser);
-    localStorage.setItem('homepay_user', JSON.stringify(newUser));
-    setGoogleUser(null);
-    return { success: true };
+    try {
+      await setDoc(doc(db, "users", googleUser.uid), newUser);
+      setUser(newUser);
+      setGoogleUser(null);
+      return { success: true };
+    } catch (err) {
+      console.error('Error writing user profile to Firestore:', err);
+      return { success: false, error: err.message || 'Failed to save profile' };
+    }
   };
 
   const cancelGoogleSignup = async () => {
@@ -230,7 +220,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     setUser(null);
-    localStorage.removeItem('homepay_user');
+    localStorage.clear();
+    sessionStorage.clear();
     try {
       await firebaseSignOut(auth);
     } catch (e) {
