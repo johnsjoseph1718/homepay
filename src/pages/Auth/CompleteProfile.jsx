@@ -60,7 +60,7 @@ const CompleteProfile = () => {
             }
         }
 
-        const result = completeGoogleSignup(formData);
+        const result = await completeGoogleSignup(formData);
 
         if (result.success) {
             navigate('/', { replace: true });

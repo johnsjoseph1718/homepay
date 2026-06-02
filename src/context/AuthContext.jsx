@@ -6,7 +6,14 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('homepay_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [googleUser, setGoogleUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,18 +26,35 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          let userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          let userDoc = null;
           const isGoogle = firebaseUser.providerData.some(p => p.providerId === 'google.com');
           
-          if (!userDoc.exists() && !isGoogle) {
-            // Wait 1 second for the signup function to finish creating the Firestore profile document
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          try {
             userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+            if (!userDoc.exists() && !isGoogle) {
+              // Wait 1 second for the signup function to finish creating the Firestore profile document
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+            }
+          } catch (err) {
+            console.warn("Firestore fetch error, falling back to cache:", err);
+            const cachedUser = localStorage.getItem('homepay_user');
+            if (cachedUser) {
+              const parsed = JSON.parse(cachedUser);
+              if (parsed.uid === firebaseUser.uid) {
+                setUser(parsed);
+                setGoogleUser(null);
+                setLoading(false);
+                return;
+              }
+            }
+            throw err;
           }
 
-          if (userDoc.exists()) {
+          if (userDoc && userDoc.exists()) {
             const profileData = userDoc.data();
             setUser(profileData);
+            localStorage.setItem('homepay_user', JSON.stringify(profileData));
             setGoogleUser(null);
           } else {
             if (isGoogle) {
@@ -41,13 +65,16 @@ export const AuthProvider = ({ children }) => {
               });
             }
             setUser(null);
+            localStorage.removeItem('homepay_user');
           }
         } catch (error) {
           console.error("Error fetching user profile from Firestore:", error);
           setUser(null);
+          localStorage.removeItem('homepay_user');
         }
       } else {
         setUser(null);
+        localStorage.removeItem('homepay_user');
       }
       setLoading(false);
     });
@@ -63,11 +90,26 @@ export const AuthProvider = ({ children }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const { email, displayName, uid } = result.user;
 
-      const userDoc = await getDoc(doc(db, "users", uid));
+      let userDoc = null;
+      try {
+        userDoc = await getDoc(doc(db, "users", uid));
+      } catch (err) {
+        console.warn("Google Sign-In Firestore check failed, falling back to cache:", err);
+        const cachedUser = localStorage.getItem('homepay_user');
+        if (cachedUser) {
+          const parsed = JSON.parse(cachedUser);
+          if (parsed.uid === uid) {
+            setUser(parsed);
+            return { success: true, isNewUser: false };
+          }
+        }
+        throw err;
+      }
 
-      if (userDoc.exists()) {
+      if (userDoc && userDoc.exists()) {
         const profileData = userDoc.data();
         setUser(profileData);
+        localStorage.setItem('homepay_user', JSON.stringify(profileData));
         return { success: true, isNewUser: false };
       } else {
         setGoogleUser({ name: displayName || '', email, uid });
@@ -139,6 +181,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await setDoc(doc(db, "users", googleUser.uid), newUser);
       setUser(newUser);
+      localStorage.setItem('homepay_user', JSON.stringify(newUser));
       setGoogleUser(null);
       return { success: true };
     } catch (err) {
@@ -163,13 +206,30 @@ export const AuthProvider = ({ children }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       const { uid } = result.user;
-      const userDoc = await getDoc(doc(db, "users", uid));
-      if (userDoc.exists()) {
-        const profileData = userDoc.data();
+      
+      let profileData = null;
+      try {
+        const userDoc = await getDoc(doc(db, "users", uid));
+        if (userDoc.exists()) {
+          profileData = userDoc.data();
+        }
+      } catch (err) {
+        console.warn("Offline login Firestore fetch warning:", err);
+        const cachedUser = localStorage.getItem('homepay_user');
+        if (cachedUser) {
+          const parsed = JSON.parse(cachedUser);
+          if (parsed.uid === uid) {
+            profileData = parsed;
+          }
+        }
+      }
+
+      if (profileData) {
         setUser(profileData);
+        localStorage.setItem('homepay_user', JSON.stringify(profileData));
         return { success: true };
       } else {
-        return { success: false, error: 'User profile not found in Firestore.' };
+        return { success: false, error: 'User profile not found.' };
       }
     } catch (error) {
       console.error("Email Login Error:", error);
@@ -234,8 +294,14 @@ export const AuthProvider = ({ children }) => {
         ...assignedDetails
       };
 
-      await setDoc(doc(db, "users", uid), newUser);
+      try {
+        await setDoc(doc(db, "users", uid), newUser);
+      } catch (err) {
+        console.warn("Offline setDoc warning, caching profile locally:", err);
+      }
+
       setUser(newUser);
+      localStorage.setItem('homepay_user', JSON.stringify(newUser));
       return { success: true };
     } catch (err) {
       console.error('Email Signup Error:', err);
