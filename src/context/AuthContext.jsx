@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
             return { success: true, isNewUser: false };
           }
         }
-        throw err;
+        throw new Error('Firestore is unreachable. Please verify that you have clicked "Create Database" under Firestore Database in your Firebase Console (homepay-d84fd) and allowed reads/writes in the Rules tab.');
       }
 
       if (userDoc && userDoc.exists()) {
@@ -240,6 +240,9 @@ export const AuthProvider = ({ children }) => {
           if (parsed.uid === uid) {
             profileData = parsed;
           }
+        }
+        if (!profileData) {
+          throw new Error('Firestore is unreachable. Please verify that you have clicked "Create Database" under Firestore Database in your Firebase Console (homepay-d84fd) and allowed reads/writes in the Rules tab.');
         }
       }
 
