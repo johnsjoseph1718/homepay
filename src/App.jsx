@@ -4,6 +4,7 @@ import { DataProvider } from './context/DataContext';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
+import CompleteProfile from './pages/Auth/CompleteProfile';
 import Layout from './components/Layout';
 import StudentDashboard from './pages/Dashboard/StudentDashboard';
 import RepDashboard from './pages/Dashboard/RepDashboard';
@@ -18,7 +19,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 };
 
 const RootRedirect = () => {
-  const { user } = useAuth();
+  const { user, googleUser } = useAuth();
+  if (!user && googleUser) return <Navigate to="/complete-profile" replace />;
   if (!user) return <Navigate to="/login" replace />;
   // Redirect based on role
   switch (user.role) {
@@ -38,6 +40,7 @@ const App = () => {
             <Route path="/" element={<RootRedirect />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
 
             <Route path="/dashboard" element={<Layout />}>
               <Route path="student" element={
@@ -78,3 +81,4 @@ const App = () => {
 };
 
 export default App;
+

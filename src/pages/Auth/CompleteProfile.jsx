@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Receipt, Key, UserCheck } from 'lucide-react';
+import { Receipt, Key, UserCheck, LogOut } from 'lucide-react';
 
-const Signup = () => {
+const CompleteProfile = () => {
+    const { googleUser, completeGoogleSignup, cancelGoogleSignup } = useAuth();
+    const navigate = useNavigate();
+
     const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
         role: 'student',
         department: '',
         semester: '',
@@ -17,22 +17,15 @@ const Signup = () => {
         uniqueRepId: ''
     });
     const [error, setError] = useState('');
-    const { signup, signInWithGoogle } = useAuth();
-    const navigate = useNavigate();
 
-    const handleGoogleSignUp = async () => {
-        setError('');
-        const result = await signInWithGoogle();
-        if (result.success) {
-            if (result.isNewUser) {
-                navigate('/complete-profile');
-            } else {
-                navigate('/');
-            }
-        } else {
-            setError(result.error);
+    useEffect(() => {
+        // Guard: If there is no pending Google user, send them back to login
+        if (!googleUser) {
+            navigate('/login', { replace: true });
         }
-    };
+    }, [googleUser, navigate]);
+
+    if (!googleUser) return null;
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -40,22 +33,17 @@ const Signup = () => {
     };
 
     const getExpectedCode = () => {
-        const firstName = formData.name.trim().split(/\s+/)[0];
+        const firstName = googleUser.name.trim().split(/\s+/)[0];
         return firstName ? `${firstName}0001` : '';
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
-        if (!formData.name || !formData.email || !formData.password || !formData.role) {
-            setError("Please fill all required fields.");
-            return;
-        }
-
         if (formData.role === 'student' || formData.role === 'rep') {
             if (!formData.department || !formData.semester || !formData.division) {
-                setError("Please select your target Department, Semester, and Division coordinates.");
+                setError("Please select your Department, Semester, and Division.");
                 return;
             }
         }
@@ -72,13 +60,18 @@ const Signup = () => {
             }
         }
 
-        const result = signup(formData);
+        const result = completeGoogleSignup(formData);
 
         if (result.success) {
-            navigate('/');
+            navigate('/', { replace: true });
         } else {
             setError(result.error);
         }
+    };
+
+    const handleCancel = async () => {
+        await cancelGoogleSignup();
+        navigate('/login', { replace: true });
     };
 
     const expectedCode = getExpectedCode();
@@ -100,8 +93,8 @@ const Signup = () => {
                     }}>
                         <Receipt size={32} />
                     </div>
-                    <h1 className="display-title" style={{ fontSize: '1.6rem', marginBottom: 'var(--spacing-xs)' }}>Create your account</h1>
-                    <p className="text-muted" style={{ fontSize: '0.9rem' }}>Join HomePay to streamline college fee collections</p>
+                    <h1 className="display-title" style={{ fontSize: '1.6rem', marginBottom: 'var(--spacing-xs)' }}>Complete your profile</h1>
+                    <p className="text-muted" style={{ fontSize: '0.9rem' }}>Welcome, {googleUser.name}! Please set up your role below.</p>
                 </div>
 
                 {error && (
@@ -122,6 +115,18 @@ const Signup = () => {
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
                     
                     <div className="input-group">
+                        <label className="input-label" htmlFor="email-preview">Authenticated Google Account</label>
+                        <input
+                            id="email-preview"
+                            type="text"
+                            className="input-field"
+                            value={googleUser.email}
+                            disabled
+                            style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: 'var(--color-text-muted)', fontWeight: 500 }}
+                        />
+                    </div>
+
+                    <div className="input-group">
                         <label className="input-label" htmlFor="role">Select Your Role</label>
                         <select
                             id="role"
@@ -137,50 +142,6 @@ const Signup = () => {
                         </select>
                     </div>
 
-                    <div className="input-group">
-                        <label className="input-label" htmlFor="name">Full Name</label>
-                        <input
-                            id="name"
-                            name="name"
-                            type="text"
-                            className="input-field"
-                            placeholder="e.g. Alan Joseph"
-                            value={formData.name}
-                            onChange={handleInputChange}
-                            required
-                        />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-                        <div className="input-group" style={{ flex: 1 }}>
-                            <label className="input-label" htmlFor="email">Email Address</label>
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                className="input-field"
-                                placeholder="name@college.edu"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                required
-                            />
-                        </div>
-
-                        <div className="input-group" style={{ flex: 1 }}>
-                            <label className="input-label" htmlFor="password">Password</label>
-                            <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                className="input-field"
-                                placeholder="••••••••"
-                                value={formData.password}
-                                onChange={handleInputChange}
-                                required
-                            />
-                        </div>
-                    </div>
-
                     {/* DYNAMIC FIELD PANEL FOR REPRESENTATIVES */}
                     {formData.role === 'rep' && (
                         <div className="card" style={{
@@ -190,7 +151,8 @@ const Signup = () => {
                             marginBottom: 'var(--spacing-xs)',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 'var(--spacing-xs)'
+                            gap: 'var(--spacing-xs)',
+                            boxShadow: 'none'
                         }}>
                             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 <Key size={16} /> Representative Verification
@@ -212,7 +174,7 @@ const Signup = () => {
                                     name="uniqueRepId"
                                     type="text"
                                     className="input-field"
-                                    placeholder={expectedCode ? `e.g. ${expectedCode}` : "Enter name to see expected code"}
+                                    placeholder={expectedCode ? `e.g. ${expectedCode}` : "Enter details to see expected code"}
                                     style={{ borderColor: 'var(--color-primary)', letterSpacing: '0.05em', fontWeight: 600 }}
                                     value={formData.uniqueRepId}
                                     onChange={handleInputChange}
@@ -229,7 +191,8 @@ const Signup = () => {
                             marginBottom: 'var(--spacing-xs)',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 'var(--spacing-xs)'
+                            gap: 'var(--spacing-xs)',
+                            boxShadow: 'none'
                         }}>
                             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 <UserCheck size={16} /> Student Credentials
@@ -275,7 +238,8 @@ const Signup = () => {
                             marginBottom: 'var(--spacing-sm)',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 'var(--spacing-xs)'
+                            gap: 'var(--spacing-xs)',
+                            boxShadow: 'none'
                         }}>
                             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 Class Assignment
@@ -348,50 +312,18 @@ const Signup = () => {
                         </div>
                     )}
 
-                    <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--spacing-xs)', py: '0.75rem' }}>
-                        Register Account
-                    </button>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-xs)' }}>
+                        <button type="button" onClick={handleCancel} className="btn btn-outline" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            <LogOut size={16} /> Cancel
+                        </button>
+                        <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                            Complete Registration
+                        </button>
+                    </div>
                 </form>
-
-                <div style={{ display: 'flex', alignItems: 'center', margin: 'var(--spacing-md) 0', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-border)' }}></div>
-                    <span style={{ padding: '0 var(--spacing-sm)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>or</span>
-                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-border)' }}></div>
-                </div>
-
-                <button
-                    type="button"
-                    onClick={handleGoogleSignUp}
-                    className="btn btn-outline"
-                    style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '10px',
-                        fontWeight: 600,
-                        padding: '0.75rem 1rem',
-                        borderColor: '#e2e8f0',
-                        transition: 'all 0.2s',
-                        backgroundColor: '#ffffff'
-                    }}
-                >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                    </svg>
-                    Sign up with Google
-                </button>
-
-                <p style={{ textAlign: 'center', marginTop: 'var(--spacing-md)', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                    Already registered?{' '}
-                    <a href="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Sign in instead</a>
-                </p>
             </div>
         </div>
     );
 };
 
-export default Signup;
+export default CompleteProfile;
