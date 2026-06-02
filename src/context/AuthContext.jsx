@@ -25,6 +25,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signInWithGoogle = async () => {
+    if (!auth) {
+      return { success: false, error: 'Firebase is not initialized. Please verify that your Vercel Environment Variables are correctly configured with VITE_ prefixes, and that you have redeployed.' };
+    }
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const { email, displayName, uid } = result.user;

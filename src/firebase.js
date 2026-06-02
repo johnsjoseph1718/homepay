@@ -14,7 +14,18 @@ let app;
 let auth;
 let googleProvider;
 
-const isConfigValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'AIzaSyYourApiKeyHere';
+console.log("Firebase Env Check:", {
+  apiKey: firebaseConfig.apiKey ? "LOADED" : "MISSING",
+  authDomain: firebaseConfig.authDomain ? "LOADED" : "MISSING",
+  projectId: firebaseConfig.projectId ? "LOADED" : "MISSING",
+  storageBucket: firebaseConfig.storageBucket ? "LOADED" : "MISSING",
+  messagingSenderId: firebaseConfig.messagingSenderId ? "LOADED" : "MISSING",
+  appId: firebaseConfig.appId ? "LOADED" : "MISSING"
+});
+
+const isConfigValid = firebaseConfig.apiKey && 
+                      firebaseConfig.apiKey !== 'AIzaSyYourApiKeyHere' && 
+                      !firebaseConfig.apiKey.includes('YourApiKeyHere');
 
 if (isConfigValid) {
   try {
