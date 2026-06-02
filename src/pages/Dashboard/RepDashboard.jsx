@@ -442,6 +442,60 @@ const RepDashboard = () => {
                 </div>
             )}
 
+            {/* Classroom Roster Section */}
+            <div className="card animate-fade-in">
+                <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-xs)' }}>
+                    <Users size={22} style={{ color: 'var(--color-primary)' }} />
+                    Classroom Roster (Registered Students)
+                </h3>
+                <p className="text-muted" style={{ marginBottom: 'var(--spacing-md)', fontSize: '0.8rem' }}>
+                    View all students currently registered in {user.department} • {user.semester} • Division {user.division}.
+                </p>
+
+                <div className="table-container shadow-md">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Roll Number</th>
+                                <th>Student Name</th>
+                                <th>Email</th>
+                                <th>Admission Number</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {classStudents.map(student => (
+                                <tr key={student.id}>
+                                    <td style={{ fontWeight: 700, fontFamily: 'monospace', color: 'var(--color-primary)', fontSize: '0.8rem' }}>
+                                        {student.rollNumber || 'N/A'}
+                                    </td>
+                                    <td style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+                                        {student.name}
+                                    </td>
+                                    <td style={{ color: 'var(--color-text-muted)' }}>
+                                        {student.email}
+                                    </td>
+                                    <td style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>
+                                        {student.admissionNumber || 'N/A'}
+                                    </td>
+                                    <td>
+                                        <span className="badge badge-success">Registered</span>
+                                    </td>
+                                </tr>
+                            ))}
+
+                            {classStudents.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 'var(--spacing-lg)' }}>
+                                        No registered students found in this class yet.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Collection History Logs (Closed Campaigns) */}
             <div>
                 <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
