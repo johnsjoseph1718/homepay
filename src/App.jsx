@@ -25,7 +25,9 @@ const RootRedirect = () => {
   // Redirect based on role
   switch (user.role) {
     case 'student': return <Navigate to="/dashboard/student" replace />;
-    case 'representative': return <Navigate to="/dashboard/rep" replace />;
+    case 'representative':
+    case 'rep':
+      return <Navigate to="/dashboard/rep" replace />;
     case 'admin': return <Navigate to="/dashboard/admin" replace />;
     default: return <Navigate to="/login" replace />;
   }

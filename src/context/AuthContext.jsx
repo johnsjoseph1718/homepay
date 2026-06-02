@@ -9,7 +9,14 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('homepay_user');
-      return savedUser ? JSON.parse(savedUser) : null;
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.role === 'rep') {
+          parsed.role = 'representative';
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -53,6 +60,10 @@ export const AuthProvider = ({ children }) => {
 
           if (userDoc && userDoc.exists()) {
             const profileData = userDoc.data();
+            if (profileData.role === 'rep') {
+              profileData.role = 'representative';
+              setDoc(doc(db, "users", firebaseUser.uid), { role: 'representative' }, { merge: true }).catch(err => console.error("Error upgrading user role:", err));
+            }
             setUser(profileData);
             localStorage.setItem('homepay_user', JSON.stringify(profileData));
             setGoogleUser(null);
@@ -108,6 +119,10 @@ export const AuthProvider = ({ children }) => {
 
       if (userDoc && userDoc.exists()) {
         const profileData = userDoc.data();
+        if (profileData.role === 'rep') {
+          profileData.role = 'representative';
+          setDoc(doc(db, "users", uid), { role: 'representative' }, { merge: true }).catch(err => console.error("Error upgrading user role:", err));
+        }
         setUser(profileData);
         localStorage.setItem('homepay_user', JSON.stringify(profileData));
         return { success: true, isNewUser: false };
@@ -212,6 +227,10 @@ export const AuthProvider = ({ children }) => {
         const userDoc = await getDoc(doc(db, "users", uid));
         if (userDoc.exists()) {
           profileData = userDoc.data();
+          if (profileData.role === 'rep') {
+            profileData.role = 'representative';
+            setDoc(doc(db, "users", uid), { role: 'representative' }, { merge: true }).catch(err => console.error("Error upgrading user role:", err));
+          }
         }
       } catch (err) {
         console.warn("Offline login Firestore fetch warning:", err);
