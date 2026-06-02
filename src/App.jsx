@@ -25,7 +25,7 @@ const RootRedirect = () => {
   // Redirect based on role
   switch (user.role) {
     case 'student': return <Navigate to="/dashboard/student" replace />;
-    case 'rep': return <Navigate to="/dashboard/rep" replace />;
+    case 'representative': return <Navigate to="/dashboard/rep" replace />;
     case 'admin': return <Navigate to="/dashboard/admin" replace />;
     default: return <Navigate to="/login" replace />;
   }
@@ -79,12 +79,12 @@ const AppContent = () => {
           } />
 
           <Route path="rep" element={
-            <ProtectedRoute allowedRoles={['rep']}>
+            <ProtectedRoute allowedRoles={['representative']}>
               <RepDashboard />
             </ProtectedRoute>
           } />
           <Route path="rep/create" element={
-            <ProtectedRoute allowedRoles={['rep']}>
+            <ProtectedRoute allowedRoles={['representative']}>
               <CreateRequest />
             </ProtectedRoute>
           } />

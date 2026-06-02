@@ -28,53 +28,10 @@ export const DataProvider = ({ children }) => {
     // Seed mock data if database is empty
     useEffect(() => {
         // Load active databases
-        let dbUsers = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
         let dbRequests = JSON.parse(localStorage.getItem('homepay_db_requests') || '[]');
         let dbPayments = JSON.parse(localStorage.getItem('homepay_db_payments') || '[]');
 
-        // 1. Seed Student Cohort if not present
-        const hasStudents = dbUsers.some(u => u.role === 'student' && u.department === 'Computer Science' && u.semester === 'S5' && u.division === 'B');
-        
-        // Setup fixed ID for our seeded representative so everything maps nicely
-        let repAlanId = 'rep_alan_id';
-        const hasAlan = dbUsers.some(u => u.uniqueRepId === 'Alan0001');
-        if (!hasAlan) {
-            dbUsers.push({
-                id: repAlanId,
-                name: 'Alan Kurian',
-                email: 'rep@college.edu',
-                password: 'password',
-                role: 'rep',
-                department: 'Computer Science',
-                semester: 'S5',
-                division: 'B',
-                uniqueRepId: 'Alan0001',
-                activeStatus: 'active'
-            });
-            // Mark the rep access token as claimed
-            const repIds = JSON.parse(localStorage.getItem('homepay_db_rep_access_ids') || '[]');
-            const matchingToken = repIds.find(t => t.id === 'Alan0001');
-            if (matchingToken) {
-                matchingToken.isUsed = true;
-                localStorage.setItem('homepay_db_rep_access_ids', JSON.stringify(repIds));
-            }
-        } else {
-            const alanObj = dbUsers.find(u => u.uniqueRepId === 'Alan0001');
-            repAlanId = alanObj.id;
-        }
-
-        if (!hasStudents) {
-            // Seed 5 students in CS S5 Division B
-            const seedStudents = [
-                { id: 'stud_1', name: 'Abhijith K.', email: 'stud1@college.edu', password: 'password', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B01', admissionNumber: 'ADM8720' },
-                { id: 'stud_2', name: 'Aishwarya Roy', email: 'stud2@college.edu', password: 'password', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B02', admissionNumber: 'ADM8721' },
-                { id: 'stud_3', name: 'Basil Eldhose', email: 'stud3@college.edu', password: 'password', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B03', admissionNumber: 'ADM8722' },
-                { id: 'stud_4', name: 'Devika S.', email: 'stud4@college.edu', password: 'password', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B04', admissionNumber: 'ADM8723' },
-                { id: 'stud_5', name: 'Gautham Krishna', email: 'stud5@college.edu', password: 'password', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B05', admissionNumber: 'ADM8724' }
-            ];
-            dbUsers.push(...seedStudents);
-            localStorage.setItem('homepay_db_users', JSON.stringify(dbUsers));
-        }
+        const repAlanId = 'rep_alan_id';
 
         // 2. Seed Default payment requests if empty
         if (dbRequests.length === 0) {
@@ -122,9 +79,9 @@ export const DataProvider = ({ children }) => {
             id: `req_${Date.now()}`,
             ...data,
             // Lock request parameters automatically to representative class coordinates
-            department: user.role === 'rep' ? user.department : data.department,
-            semester: user.role === 'rep' ? user.semester : data.semester,
-            division: user.role === 'rep' ? user.division : data.division,
+            department: user.role === 'representative' ? user.department : data.department,
+            semester: user.role === 'representative' ? user.semester : data.semester,
+            division: user.role === 'representative' ? user.division : data.division,
             createdBy: user.id,
             status: 'active'
         };
@@ -155,7 +112,7 @@ export const DataProvider = ({ children }) => {
     const getRequestsForUser = useCallback(() => {
         if (!user) return [];
         if (user.role === 'admin') return requests;
-        if (user.role === 'rep') return requests.filter(r => r.createdBy === user.id);
+        if (user.role === 'representative') return requests.filter(r => r.createdBy === user.id);
         
         // For Students, return all requests targeted at their specific Class
         if (user.role === 'student') {
@@ -205,10 +162,16 @@ export const DataProvider = ({ children }) => {
             });
         }
 
-        // Fallback to seeded localStorage users if no real Firestore users are registered in this class yet
-        const localUsers = JSON.parse(localStorage.getItem('homepay_db_users') || '[]');
-        return localUsers.filter(u => 
-            u.role === 'student' && 
+        // Fallback to static seed students if no real Firestore users are registered in this class yet
+        const seedStudents = [
+            { id: 'stud_1', name: 'Abhijith K.', email: 'stud1@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B01', admissionNumber: 'ADM8720' },
+            { id: 'stud_2', name: 'Aishwarya Roy', email: 'stud2@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B02', admissionNumber: 'ADM8721' },
+            { id: 'stud_3', name: 'Basil Eldhose', email: 'stud3@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B03', admissionNumber: 'ADM8722' },
+            { id: 'stud_4', name: 'Devika S.', email: 'stud4@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B04', admissionNumber: 'ADM8723' },
+            { id: 'stud_5', name: 'Gautham Krishna', email: 'stud5@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B05', admissionNumber: 'ADM8724' }
+        ];
+
+        return seedStudents.filter(u => 
             u.department?.trim().toLowerCase() === dept?.trim().toLowerCase() &&
             u.semester?.trim().toLowerCase() === sem?.trim().toLowerCase() &&
             u.division?.trim().toLowerCase() === div?.trim().toLowerCase()

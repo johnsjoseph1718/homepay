@@ -19,7 +19,7 @@ const Layout = () => {
                 return [
                     { name: 'Student Portal', path: '/dashboard/student', icon: Home },
                 ];
-            case 'rep':
+            case 'representative':
                 return [
                     { name: 'Dashboard', path: '/dashboard/rep', icon: Home },
                     { name: 'Create Demand', path: '/dashboard/rep/create', icon: PlusCircle },
@@ -138,7 +138,7 @@ const Layout = () => {
                             </div>
                         )}
 
-                        {user.role === 'rep' && (
+                        {user.role === 'representative' && (
                             <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <span className="badge badge-warning" style={{ alignSelf: 'flex-start', fontSize: '0.6rem', padding: '1px 6px', backgroundColor: '#e0e7ff', color: 'var(--color-primary)' }}>Representative</span>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>Class: {user.department} • {user.semester} • Div {user.division}</span>

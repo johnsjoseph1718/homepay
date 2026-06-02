@@ -15,9 +15,9 @@ const CreateRequest = () => {
         description: '',
         amount: '',
         deadline: '',
-        department: user.role === 'rep' ? user.department : '',
-        semester: user.role === 'rep' ? user.semester : '',
-        division: user.role === 'rep' ? user.division : ''
+        department: user.role === 'representative' ? user.department : '',
+        semester: user.role === 'representative' ? user.semester : '',
+        division: user.role === 'representative' ? user.division : ''
     });
 
     const handleInputChange = (e) => {
@@ -134,7 +134,7 @@ const CreateRequest = () => {
                     </div>
 
                     {/* DYNAMIC TARGET LOCKING BASED ON ROLE */}
-                    {user.role === 'rep' ? (
+                    {user.role === 'representative' ? (
                         <div style={{
                             backgroundColor: '#f8fafc',
                             border: '1px dashed var(--color-input-border)',

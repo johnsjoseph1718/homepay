@@ -41,7 +41,7 @@ const CompleteProfile = () => {
         e.preventDefault();
         setError('');
 
-        if (formData.role === 'student' || formData.role === 'rep') {
+        if (formData.role === 'student' || formData.role === 'representative') {
             if (!formData.department || !formData.semester || !formData.division) {
                 setError("Please select your Department, Semester, and Division.");
                 return;
@@ -53,7 +53,7 @@ const CompleteProfile = () => {
                 setError("Roll number and Admission number are required for students.");
                 return;
             }
-        } else if (formData.role === 'rep') {
+        } else if (formData.role === 'representative') {
             if (!formData.uniqueRepId) {
                 setError("Please enter your Representative Verification Code.");
                 return;
@@ -137,13 +137,13 @@ const CompleteProfile = () => {
                             onChange={handleInputChange}
                         >
                             <option value="student">Student (Class Member)</option>
-                            <option value="rep">Class Representative (Manager)</option>
+                            <option value="representative">Class Representative (Manager)</option>
                             <option value="admin">Teacher / Admin</option>
                         </select>
                     </div>
 
                     {/* DYNAMIC FIELD PANEL FOR REPRESENTATIVES */}
-                    {formData.role === 'rep' && (
+                    {formData.role === 'representative' && (
                         <div className="card" style={{
                             backgroundColor: '#fafbff',
                             borderColor: 'var(--color-primary-light)',
@@ -231,7 +231,7 @@ const CompleteProfile = () => {
                     )}
 
                     {/* ACADEMIC TARGET SELECTORS FOR STUDENTS AND REPRESENTATIVES */}
-                    {(formData.role === 'student' || formData.role === 'rep') && (
+                    {(formData.role === 'student' || formData.role === 'representative') && (
                         <div className="card" style={{
                             backgroundColor: '#f8fafc',
                             padding: 'var(--spacing-md)',
