@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, db, doc, getDoc, setDoc } from '../firebase';
+import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, db, doc, getDoc, setDoc, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -19,17 +19,27 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          let userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          const isGoogle = firebaseUser.providerData.some(p => p.providerId === 'google.com');
+          
+          if (!userDoc.exists() && !isGoogle) {
+            // Wait 1 second for the signup function to finish creating the Firestore profile document
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          }
+
           if (userDoc.exists()) {
             const profileData = userDoc.data();
             setUser(profileData);
             setGoogleUser(null);
           } else {
-            setGoogleUser({
-              name: firebaseUser.displayName || '',
-              email: firebaseUser.email,
-              uid: firebaseUser.uid
-            });
+            if (isGoogle) {
+              setGoogleUser({
+                name: firebaseUser.displayName || '',
+                email: firebaseUser.email,
+                uid: firebaseUser.uid
+              });
+            }
             setUser(null);
           }
         } catch (error) {
@@ -64,6 +74,9 @@ export const AuthProvider = ({ children }) => {
         return { success: true, isNewUser: true };
       }
     } catch (error) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        return { success: false, error: 'popup-closed-by-user' };
+      }
       console.error('Google Sign In Error:', error);
       return { success: false, error: error.message || 'Google sign in failed' };
     }
@@ -143,10 +156,96 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const login = async (email, password) => {
+    if (!auth) {
+      return { success: false, error: 'Firebase is not initialized.' };
+    }
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const { uid } = result.user;
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        const profileData = userDoc.data();
+        setUser(profileData);
+        return { success: true };
+      } else {
+        return { success: false, error: 'User profile not found in Firestore.' };
+      }
+    } catch (error) {
+      console.error("Email Login Error:", error);
+      return { success: false, error: error.message || 'Login failed' };
+    }
+  };
+
+  const signup = async (signupData) => {
+    if (!auth) {
+      return { success: false, error: 'Firebase is not initialized.' };
+    }
+    const { name, email, password, role } = signupData;
+
+    let assignedDetails = {
+      department: signupData.department || '',
+      semester: signupData.semester || '',
+      division: signupData.division || '',
+      rollNumber: signupData.rollNumber || '',
+      admissionNumber: signupData.admissionNumber || '',
+      uniqueRepId: '',
+      activeStatus: 'active'
+    };
+
+    if (role === 'representative') {
+      if (!signupData.department || !signupData.semester || !signupData.division) {
+        return { success: false, error: 'Department, Semester, and Division are required for representatives.' };
+      }
+
+      const firstName = name.trim().split(/\s+/)[0] || '';
+      if (!firstName) {
+        return { success: false, error: 'Full Name is required to validate representative access.' };
+      }
+
+      const expectedCode = `${firstName}0001`;
+      const enteredCode = signupData.uniqueRepId?.trim();
+
+      if (enteredCode !== expectedCode) {
+        return { success: false, error: 'Representative code invalid' };
+      }
+
+      assignedDetails.department = signupData.department;
+      assignedDetails.semester = signupData.semester;
+      assignedDetails.division = signupData.division;
+      assignedDetails.uniqueRepId = expectedCode;
+      assignedDetails.activeStatus = 'active';
+    } else if (role === 'student') {
+      if (!signupData.rollNumber || !signupData.admissionNumber || !signupData.department || !signupData.semester || !signupData.division) {
+        return { success: false, error: 'All academic credentials and class selections are required for students.' };
+      }
+    }
+
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      const { uid } = result.user;
+
+      const newUser = {
+        id: uid,
+        name,
+        email,
+        role, // 'student' | 'representative' | 'admin'
+        uid,
+        ...assignedDetails
+      };
+
+      await setDoc(doc(db, "users", uid), newUser);
+      setUser(newUser);
+      return { success: true };
+    } catch (err) {
+      console.error('Email Signup Error:', err);
+      return { success: false, error: err.message || 'Failed to save profile' };
+    }
+  };
+
   const logout = async () => {
     setUser(null);
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.removeItem('homepay_user');
     try {
       await firebaseSignOut(auth);
     } catch (e) {
@@ -155,7 +254,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleUser, loading, signInWithGoogle, completeGoogleSignup, cancelGoogleSignup, logout }}>
+    <AuthContext.Provider value={{ user, googleUser, loading, login, signup, signInWithGoogle, completeGoogleSignup, cancelGoogleSignup, logout }}>
       {children}
     </AuthContext.Provider>
   );

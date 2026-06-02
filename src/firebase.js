@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -45,6 +45,6 @@ if (isConfigValid) {
   console.warn('Firebase Warning: Firebase credentials are not fully configured yet. Google Sign-In will not be active.');
 }
 
-export { app, auth, googleProvider, db, doc, getDoc, setDoc, collection, onSnapshot, signInWithPopup, signOut, onAuthStateChanged };
+export { app, auth, googleProvider, db, doc, getDoc, setDoc, collection, onSnapshot, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword };
 
 
