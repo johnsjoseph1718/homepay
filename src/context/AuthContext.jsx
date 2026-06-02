@@ -6,7 +6,10 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('homepay_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [googleUser, setGoogleUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,22 +26,29 @@ export const AuthProvider = ({ children }) => {
           if (userDoc.exists()) {
             const profileData = userDoc.data();
             setUser(profileData);
+            localStorage.setItem('homepay_user', JSON.stringify(profileData));
             setGoogleUser(null);
           } else {
-            // Firebase Auth authenticated, but profile document not created in Firestore yet
             setGoogleUser({
               name: firebaseUser.displayName || '',
               email: firebaseUser.email,
               uid: firebaseUser.uid
             });
             setUser(null);
+            localStorage.removeItem('homepay_user');
           }
         } catch (error) {
-          console.error("Error fetching user profile from Firestore:", error);
-          setUser(null);
+          console.warn("Offline fallback warning: Firestore is unreachable, reading from cached profile.", error);
+          const cachedUser = localStorage.getItem('homepay_user');
+          if (cachedUser) {
+            setUser(JSON.parse(cachedUser));
+          } else {
+            setUser(null);
+          }
         }
       } else {
         setUser(null);
+        localStorage.removeItem('homepay_user');
       }
       setLoading(false);
     });
@@ -65,11 +75,27 @@ export const AuthProvider = ({ children }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const { email, displayName, uid } = result.user;
 
-      const userDoc = await getDoc(doc(db, "users", uid));
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, "users", uid));
+      } catch (err) {
+        // Safe offline check in case they click Google Sign-in while client fails to connect to Firestore
+        console.warn("SignIn Firestore check offline error:", err);
+        const cachedUser = localStorage.getItem('homepay_user');
+        if (cachedUser) {
+          const parsed = JSON.parse(cachedUser);
+          if (parsed.email?.trim().toLowerCase() === email?.trim().toLowerCase()) {
+            setUser(parsed);
+            return { success: true, isNewUser: false };
+          }
+        }
+        throw err;
+      }
 
-      if (userDoc.exists()) {
+      if (userDoc && userDoc.exists()) {
         const profileData = userDoc.data();
         setUser(profileData);
+        localStorage.setItem('homepay_user', JSON.stringify(profileData));
         return { success: true, isNewUser: false };
       } else {
         setGoogleUser({ name: displayName || '', email, uid });
@@ -138,6 +164,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await setDoc(doc(db, "users", googleUser.uid), newUser);
       setUser(newUser);
+      localStorage.setItem('homepay_user', JSON.stringify(newUser));
       setGoogleUser(null);
       return { success: true };
     } catch (err) {
