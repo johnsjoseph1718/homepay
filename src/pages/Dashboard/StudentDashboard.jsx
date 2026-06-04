@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { CreditCard, History, User, CheckCircle2, AlertCircle, Calendar } from 'lucide-react';
@@ -10,10 +9,15 @@ const StudentDashboard = () => {
     const requests = getRequestsForUser();
     const payments = getStudentPayments(user.id);
 
-    const handlePay = (reqId, amount) => {
+    const handlePay = async (reqId, amount) => {
         // Mock payment processing
-        makePayment(reqId, amount);
-        alert(`Payment of $${amount} completed successfully!`);
+        try {
+            await makePayment(reqId, amount);
+            alert(`Payment of $${amount} completed successfully!`);
+        } catch (error) {
+            console.error('Payment write failed:', error);
+            alert('Payment could not be recorded. Please try again.');
+        }
     };
 
     const hasPaid = (reqId) => {

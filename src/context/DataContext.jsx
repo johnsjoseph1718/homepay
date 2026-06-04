@@ -1,6 +1,16 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { db, collection, onSnapshot } from '../firebase';
+import {
+    db,
+    collection,
+    onSnapshot,
+    addDoc,
+    serverTimestamp,
+    updateDoc,
+    getDocs,
+    doc,
+    setDoc
+} from '../firebase';
 
 const DataContext = createContext();
 
@@ -12,174 +22,212 @@ export const DataProvider = ({ children }) => {
     const [payments, setPayments] = useState([]);
     const [firestoreUsers, setFirestoreUsers] = useState([]);
 
-    // Sync Firestore registered users in real-time
+    const normalise = (value) => (value || '').trim().toLowerCase();
+    const resolveUserId = useCallback((targetUser = user) => targetUser?.uid || targetUser?.id || '', [user]);
+
+    const requestMatchesStudent = useCallback((request, targetUser) => {
+        const reqDivision = normalise(request.division);
+
+        return normalise(request.department) === normalise(targetUser.department) &&
+            normalise(request.semester) === normalise(targetUser.semester) &&
+            (reqDivision === normalise(targetUser.division) || reqDivision === 'all');
+    }, []);
+
+    const requestMatchesUser = useCallback((request, targetUser) => {
+        if (!targetUser) return false;
+        if (targetUser.role === 'admin') return true;
+        if (targetUser.role === 'representative') {
+            return request.createdBy === resolveUserId(targetUser);
+        }
+        if (targetUser.role === 'student') {
+            return requestMatchesStudent(request, targetUser);
+        }
+        return false;
+    }, [requestMatchesStudent, resolveUserId]);
+
     useEffect(() => {
         if (!db) return;
-        const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
-            const usersList = [];
-            snapshot.forEach(doc => {
-                usersList.push({ id: doc.id, ...doc.data() });
-            });
-            setFirestoreUsers(usersList);
-        });
+
+        const unsubscribe = onSnapshot(
+            collection(db, 'users'),
+            (snapshot) => {
+                const usersList = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }));
+                setFirestoreUsers(usersList);
+            },
+            (error) => {
+                console.error('[HomePay] users listener error:', error.code, error.message);
+                setFirestoreUsers([]);
+            }
+        );
+
         return () => unsubscribe();
     }, []);
 
-    // Seed mock data if database is empty
+
+
     useEffect(() => {
-        // Load active databases
-        let dbRequests = JSON.parse(localStorage.getItem('homepay_db_requests') || '[]');
-        let dbPayments = JSON.parse(localStorage.getItem('homepay_db_payments') || '[]');
-
-        const repAlanId = 'rep_alan_id';
-
-        // 2. Seed Default payment requests if empty
-        if (dbRequests.length === 0) {
-            dbRequests = [
-                { id: 'req_1', title: 'College Union Fund', description: 'Contribution for college union activities and annual sports meet.', amount: 500, deadline: '2026-06-25', department: 'Computer Science', semester: 'S5', division: 'B', createdBy: repAlanId, status: 'active' },
-                { id: 'req_2', title: 'Industrial Tour Transport', description: 'Bus rental and route accommodation advance payment.', amount: 1200, deadline: '2026-07-15', department: 'Computer Science', semester: 'S5', division: 'B', createdBy: repAlanId, status: 'active' },
-                { id: 'req_3', title: 'Lab Record Sheets', description: 'Record sheets print, binding, and layout distribution fee.', amount: 150, deadline: '2026-05-10', department: 'Computer Science', semester: 'S5', division: 'B', createdBy: repAlanId, status: 'closed' }
-            ];
-            localStorage.setItem('homepay_db_requests', JSON.stringify(dbRequests));
+        if (!db || !user) {
+            queueMicrotask(() => setRequests([]));
+            return;
         }
 
-        // 3. Seed Default payments if empty
-        if (dbPayments.length === 0) {
-            dbPayments = [
-                // Seed 2 students who paid Union Fund
-                { id: 'pay_1', paymentRequestId: 'req_1', studentId: 'stud_1', amount: 500, paymentStatus: 'paid', paymentDate: '2026-05-28T10:00:00.000Z' },
-                { id: 'pay_2', paymentRequestId: 'req_1', studentId: 'stud_2', amount: 500, paymentStatus: 'paid', paymentDate: '2026-05-29T14:30:00.000Z' },
-                // Seed all students paying Lab Record Sheets (as it is closed)
-                { id: 'pay_3', paymentRequestId: 'req_3', studentId: 'stud_1', amount: 150, paymentStatus: 'paid', paymentDate: '2026-05-08T09:15:00.000Z' },
-                { id: 'pay_4', paymentRequestId: 'req_3', studentId: 'stud_2', amount: 150, paymentStatus: 'paid', paymentDate: '2026-05-08T09:25:00.000Z' },
-                { id: 'pay_5', paymentRequestId: 'req_3', studentId: 'stud_3', amount: 150, paymentStatus: 'paid', paymentDate: '2026-05-09T10:45:00.000Z' },
-                { id: 'pay_6', paymentRequestId: 'req_3', studentId: 'stud_4', amount: 150, paymentStatus: 'paid', paymentDate: '2026-05-09T11:10:00.000Z' },
-                { id: 'pay_7', paymentRequestId: 'req_3', studentId: 'stud_5', amount: 150, paymentStatus: 'paid', paymentDate: '2026-05-09T15:20:00.000Z' }
-            ];
-            localStorage.setItem('homepay_db_payments', JSON.stringify(dbPayments));
+        console.log(`[HomePay] Subscribing to payment_requests as ${user.role} (uid: ${resolveUserId(user)})`);
+
+        const unsubscribe = onSnapshot(
+            collection(db, 'payment_requests'),
+            (snapshot) => {
+                const list = snapshot.docs
+                    .map((entry) => ({ id: entry.id, ...entry.data() }))
+                    .filter((request) => requestMatchesUser(request, user))
+                    .sort((a, b) => {
+                        const aTime = a.createdAt?.toMillis?.() || 0;
+                        const bTime = b.createdAt?.toMillis?.() || 0;
+                        return bTime - aTime;
+                    });
+
+                console.log(`[HomePay] Realtime update - ${list.length} payment requests received for ${user.role}`);
+                setRequests(list);
+            },
+            (error) => {
+                console.error('[HomePay] payment_requests listener error:', error.code, error.message);
+                setRequests([]);
+            }
+        );
+
+        return () => {
+            console.log(`[HomePay] Unsubscribed from payment_requests listener (${user.role})`);
+            unsubscribe();
+        };
+    }, [requestMatchesUser, resolveUserId, user]);
+
+    useEffect(() => {
+        if (!db || !user) {
+            queueMicrotask(() => setPayments([]));
+            return;
         }
 
-        setRequests(dbRequests);
-        setPayments(dbPayments);
-    }, []);
+        const unsubscribe = onSnapshot(
+            collection(db, 'payments'),
+            (snapshot) => {
+                const list = snapshot.docs
+                    .map((entry) => ({ id: entry.id, ...entry.data() }))
+                    .filter((payment) => {
+                        if (user.role === 'admin') return true;
+                        if (user.role === 'student') return payment.studentId === resolveUserId(user);
+                        if (user.role === 'representative') {
+                            return requests.some((request) => request.id === payment.paymentRequestId);
+                        }
+                        return false;
+                    });
 
-    const saveRequests = (newRequests) => {
-        setRequests(newRequests);
-        localStorage.setItem('homepay_db_requests', JSON.stringify(newRequests));
-    };
+                setPayments(list);
+            },
+            (error) => {
+                console.error('[HomePay] payments listener error:', error.code, error.message);
+                setPayments([]);
+            }
+        );
 
-    const savePayments = (newPayments) => {
-        setPayments(newPayments);
-        localStorage.setItem('homepay_db_payments', JSON.stringify(newPayments));
-    };
+        return () => unsubscribe();
+    }, [requests, resolveUserId, user]);
 
-    // --- Request Actions ---
-    const createRequest = (data) => {
+    const createRequest = async (data) => {
+        if (!db) throw new Error('Firestore is not initialized.');
+
         const newRequest = {
-            id: `req_${Date.now()}`,
-            ...data,
-            // Lock request parameters automatically to representative class coordinates
+            title: data.title,
+            description: data.description,
+            amount: Number(data.amount),
+            deadline: data.deadline,
             department: user.role === 'representative' ? user.department : data.department,
             semester: user.role === 'representative' ? user.semester : data.semester,
             division: user.role === 'representative' ? user.division : data.division,
-            createdBy: user.id,
-            status: 'active'
+            createdBy: resolveUserId(),
+            status: 'active',
+            createdAt: serverTimestamp()
         };
-        saveRequests([...requests, newRequest]);
-        return newRequest;
+
+        try {
+            console.log('[HomePay] Writing payment request to Firestore:', newRequest);
+            const docRef = await addDoc(collection(db, 'payment_requests'), newRequest);
+            console.log('[HomePay] Firestore write success: payment request created with ID:', docRef.id);
+            return { id: docRef.id, ...newRequest };
+        } catch (error) {
+            console.error('[HomePay] Firestore write failed during payment request creation:', error);
+            throw new Error(`Failed to save payment request: ${error.message}`);
+        }
     };
 
-    const closeRequest = (id) => {
-        const newRequests = requests.map(r => r.id === id ? { ...r, status: 'closed' } : r);
-        saveRequests(newRequests);
+    const closeRequest = async (id) => {
+        if (!db) return;
+
+        try {
+            console.log('[HomePay] Closing payment request in Firestore:', id);
+            await updateDoc(doc(db, 'payment_requests', id), { status: 'closed' });
+            console.log('[HomePay] Firestore write success: payment request closed:', id);
+        } catch (error) {
+            console.error('[HomePay] Firestore write failed during closing payment request:', error);
+            throw new Error(`Failed to close payment request: ${error.message}`);
+        }
     };
 
-    // --- Payment Actions ---
-    const makePayment = (requestId, amount) => {
+    const makePayment = async (requestId, amount) => {
+        if (!db) throw new Error('Firestore is not initialized.');
+
         const newPayment = {
-            id: `pay_${Date.now()}`,
             paymentRequestId: requestId,
-            studentId: user.id,
+            studentId: resolveUserId(),
             amount,
             paymentStatus: 'paid',
-            paymentDate: new Date().toISOString()
+            paymentDate: new Date().toISOString(),
+            createdAt: serverTimestamp()
         };
-        savePayments([...payments, newPayment]);
-        return newPayment;
+
+        try {
+            console.log('[HomePay] Writing payment to Firestore:', newPayment);
+            const docRef = await addDoc(collection(db, 'payments'), newPayment);
+            console.log('[HomePay] Firestore write success: payment recorded with ID:', docRef.id);
+            return { id: docRef.id, ...newPayment };
+        } catch (error) {
+            console.error('[HomePay] Firestore write failed during payment recording:', error);
+            throw new Error(`Failed to record payment: ${error.message}`);
+        }
     };
 
-    // --- Data Accessors ---
     const getRequestsForUser = useCallback(() => {
-        if (!user) return [];
-        if (user.role === 'admin') return requests;
-        if (user.role === 'representative') return requests.filter(r => r.createdBy === user.id);
-        
-        // For Students, return all requests targeted at their specific Class
-        if (user.role === 'student') {
-            const userDept = user.department?.trim().toLowerCase();
-            const userSem = user.semester?.trim().toLowerCase();
-            const userDiv = user.division?.trim().toLowerCase();
-
-            return requests.filter(r => {
-                const reqDept = r.department?.trim().toLowerCase();
-                const reqSem = r.semester?.trim().toLowerCase();
-                const reqDiv = r.division?.trim().toLowerCase();
-
-                return (!reqDept || reqDept === userDept) &&
-                       (!reqSem || reqSem === userSem) &&
-                       (!reqDiv || reqDiv === 'all' || reqDiv === userDiv);
-            });
-        }
-        return [];
-    }, [user, requests]);
+        return requests;
+    }, [requests]);
 
     const getPaymentsForRequest = (requestId) => {
-        return payments.filter(p => p.paymentRequestId === requestId);
+        return payments.filter((payment) => payment.paymentRequestId === requestId);
     };
 
     const getStudentPayments = (studentId) => {
-        return payments.filter(p => p.studentId === studentId);
+        const currentUserId = resolveUserId();
+        return payments.filter((payment) => payment.studentId === studentId || payment.studentId === currentUserId);
     };
 
     const hasStudentPaid = (requestId, studentId) => {
-        return payments.some(p => p.paymentRequestId === requestId && p.studentId === studentId && p.paymentStatus === 'paid');
+        const currentUserId = resolveUserId();
+
+        return payments.some((payment) =>
+            payment.paymentRequestId === requestId &&
+            (payment.studentId === studentId || payment.studentId === currentUserId) &&
+            payment.paymentStatus === 'paid'
+        );
     };
 
-    // Fetch all students belonging to a target class
     const getClassStudents = useCallback((dept, sem, div) => {
-        const matchingFirestoreStudents = firestoreUsers.filter(u => 
-            u.role === 'student' && 
-            u.department?.trim().toLowerCase() === dept?.trim().toLowerCase() &&
-            u.semester?.trim().toLowerCase() === sem?.trim().toLowerCase() &&
-            u.division?.trim().toLowerCase() === div?.trim().toLowerCase()
+        const matchingFirestoreStudents = firestoreUsers.filter((entry) =>
+            entry.role === 'student' &&
+            normalise(entry.department) === normalise(dept) &&
+            normalise(entry.semester) === normalise(sem) &&
+            normalise(entry.division) === normalise(div)
         );
 
-        if (matchingFirestoreStudents.length > 0) {
-            return matchingFirestoreStudents.sort((a, b) => {
-                const rollA = a.rollNumber || '';
-                const rollB = b.rollNumber || '';
-                return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
-            });
-        }
-
-        // Fallback to static seed students if no real Firestore users are registered in this class yet
-        const seedStudents = [
-            { id: 'stud_1', name: 'Abhijith K.', email: 'stud1@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B01', admissionNumber: 'ADM8720' },
-            { id: 'stud_2', name: 'Aishwarya Roy', email: 'stud2@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B02', admissionNumber: 'ADM8721' },
-            { id: 'stud_3', name: 'Basil Eldhose', email: 'stud3@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B03', admissionNumber: 'ADM8722' },
-            { id: 'stud_4', name: 'Devika S.', email: 'stud4@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B04', admissionNumber: 'ADM8723' },
-            { id: 'stud_5', name: 'Gautham Krishna', email: 'stud5@college.edu', role: 'student', department: 'Computer Science', semester: 'S5', division: 'B', rollNumber: 'CS23B05', admissionNumber: 'ADM8724' }
-        ];
-
-        return seedStudents.filter(u => 
-            u.department?.trim().toLowerCase() === dept?.trim().toLowerCase() &&
-            u.semester?.trim().toLowerCase() === sem?.trim().toLowerCase() &&
-            u.division?.trim().toLowerCase() === div?.trim().toLowerCase()
-        ).sort((a, b) => {
-            const rollA = a.rollNumber || '';
-            const rollB = b.rollNumber || '';
-            return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
-        });
+        return matchingFirestoreStudents.sort((a, b) =>
+            (a.rollNumber || '').localeCompare(b.rollNumber || '', undefined, { numeric: true, sensitivity: 'base' })
+        );
     }, [firestoreUsers]);
 
     return (

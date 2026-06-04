@@ -1,10 +1,12 @@
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Home, Receipt, PlusCircle, CreditCard, User, Menu } from 'lucide-react';
+import { useData } from '../context/DataContext';
+import { LogOut, Home, Receipt, PlusCircle, CreditCard, User, Menu, Activity } from 'lucide-react';
 import { useState } from 'react';
 
 const Layout = () => {
     const { user, logout } = useAuth();
+    const { requests } = useData() || { requests: [] };
     const location = useLocation();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -53,7 +55,8 @@ const Layout = () => {
                 left: 0,
                 top: 0,
                 zIndex: 100,
-                boxShadow: 'var(--shadow-sm)'
+                boxShadow: 'var(--shadow-sm)',
+                overflowY: 'auto'
             }}>
                 {/* Brand Logo Header */}
                 <div style={{ marginBottom: 'var(--spacing-xl)', padding: '0 var(--spacing-sm)' }}>
@@ -169,6 +172,40 @@ const Layout = () => {
                         <LogOut size={16} />
                         Sign Out
                     </button>
+
+                    {/* System Diagnostics Panel */}
+                    <div style={{
+                        marginTop: 'var(--spacing-sm)',
+                        padding: '12px',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '0.72rem',
+                        fontFamily: 'monospace',
+                        textAlign: 'left'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                            <Activity size={12} style={{ color: '#22c55e' }} />
+                            <span>DIAGNOSTICS</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', color: '#64748b' }}>
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <strong>Proj ID:</strong> <span style={{ color: '#0f172a' }}>{import.meta.env.VITE_FIREBASE_PROJECT_ID || 'MISSING'}</span>
+                            </div>
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <strong>UID:</strong> <span style={{ color: '#0f172a' }}>{user.uid || 'None'}</span>
+                            </div>
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <strong>Email:</strong> <span style={{ color: '#0f172a' }}>{user.email || 'None'}</span>
+                            </div>
+                            <div>
+                                <strong>Class:</strong> <span style={{ color: '#0f172a' }}>{user.department?.substring(0, 10) || 'N/A'}/{user.semester || 'N/A'}/{user.division || 'N/A'}</span>
+                            </div>
+                            <div>
+                                <strong>Demands:</strong> <span style={{ color: '#0f172a', fontWeight: 'bold' }}>{requests?.length || 0}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </aside>
 

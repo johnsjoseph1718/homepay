@@ -27,7 +27,7 @@ const CreateRequest = () => {
 
     const returnPath = user.role === 'admin' ? '/dashboard/admin' : '/dashboard/rep';
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -44,12 +44,13 @@ const CreateRequest = () => {
         }
 
         try {
-            createRequest({
+            await createRequest({
                 ...formData,
                 amount: Number(formData.amount)
             });
             navigate(returnPath);
-        } catch (err) {
+        } catch (error) {
+            console.error('Failed to create payment request:', error);
             setError("Failed to broadcast the demand.");
         }
     };

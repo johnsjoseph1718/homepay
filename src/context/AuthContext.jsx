@@ -317,9 +317,19 @@ export const AuthProvider = ({ children }) => {
       };
 
       try {
+        console.log('[HomePay] Writing new user profile to Firestore users collection...');
         await setDoc(doc(db, "users", uid), newUser);
+        console.log('[HomePay] Firestore profile successfully created for:', uid);
       } catch (err) {
-        console.warn("Offline setDoc warning, caching profile locally:", err);
+        console.error('[HomePay] Error writing user profile to Firestore during signup:', err);
+        try {
+          console.log('[HomePay] Rolling back created Auth user account...');
+          await result.user.delete();
+          console.log('[HomePay] Successfully deleted orphaned Auth account.');
+        } catch (delErr) {
+          console.error('[HomePay] Failed to delete orphaned Auth account:', delErr);
+        }
+        return { success: false, error: `Failed to save database user profile: ${err.message}` };
       }
 
       setUser(newUser);

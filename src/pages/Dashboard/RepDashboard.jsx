@@ -5,7 +5,7 @@ import { Receipt, Users, PlusCircle, CheckCircle2, AlertCircle, FileSpreadsheet,
 
 const RepDashboard = () => {
     const { user } = useAuth();
-    const { getRequestsForUser, getPaymentsForRequest, closeRequest, getClassStudents, hasStudentPaid, payments, createRequest } = useData();
+    const { getRequestsForUser, closeRequest, getClassStudents, hasStudentPaid, payments, createRequest } = useData();
 
     const requests = getRequestsForUser();
     const classStudents = getClassStudents(user.department, user.semester, user.division);
@@ -25,7 +25,7 @@ const RepDashboard = () => {
     // Set first request as selected request by default
     useEffect(() => {
         if (requests.length > 0 && !selectedReqId) {
-            setSelectedReqId(requests[0].id);
+            queueMicrotask(() => setSelectedReqId(requests[0].id));
         }
     }, [requests, selectedReqId]);
 
@@ -35,7 +35,7 @@ const RepDashboard = () => {
         setNewRequestData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleCreateRequest = (e) => {
+    const handleCreateRequest = async (e) => {
         e.preventDefault();
         setCreationError('');
         setCreationSuccess('');
@@ -46,7 +46,7 @@ const RepDashboard = () => {
         }
 
         try {
-            const created = createRequest({
+            const created = await createRequest({
                 ...newRequestData,
                 amount: Number(newRequestData.amount)
             });
@@ -54,7 +54,8 @@ const RepDashboard = () => {
             setSelectedReqId(created.id);
             setCreationSuccess('Payment request successfully broadcast to your class!');
             setTimeout(() => setCreationSuccess(''), 4000);
-        } catch (err) {
+        } catch (error) {
+            console.error('Failed to create payment request:', error);
             setCreationError('Failed to create the request.');
         }
     };
